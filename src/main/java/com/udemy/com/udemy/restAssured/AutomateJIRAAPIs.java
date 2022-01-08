@@ -1,8 +1,9 @@
 package com.udemy.com.udemy.restAssured;
 
-import static io.restassured.RestAssured.given;
+import static io.restassured.RestAssured.*;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Properties;
 
@@ -15,33 +16,28 @@ import io.restassured.path.json.JsonPath;
 public class AutomateJIRAAPIs {
 
 
-	@Test
-	public static String createSessionID() throws IOException {
+public static void main(String[] args) throws IOException {
 
+/*	Create a Session ID in JIRA*/
+	
 		Properties prop = new Properties();
-		FileInputStream fis = new FileInputStream("/com.udemy.restAssured/Config/JiraLogin.properties");
+		FileInputStream fis = new FileInputStream("C:\\Users\\Pramod\\Desktop\\New folder\\com.udemy.restAssured\\Config\\JiraLogin.properties");
 		prop.load(fis);
 
 		String userName =prop.getProperty("userName");
 		String password=prop.getProperty("password");
 
-
-		RestAssured.baseURI="http://localhost:8080/";
-		String responseOfSessionResponse = given().body("{ \r\n" + 
+		/*Create a bug in JIRA*/
+		RestAssured.baseURI="http://localhost:8080";
+		String responseOfSessionResponse = given().log().all().header("Content-Type","application/json").body("{ \r\n" + 
 				"    \"username\": \""+userName+"\", \r\n" + 
 				"    \"password\": \""+password  +"\" \r\n" + 
-				"    }").when().post().then().log().all().assertThat().statusCode(200).extract().response().asString();
+				"    }").when().post("/rest/auth/1/session").then().log().all().assertThat().statusCode(200).extract().response().asString();
 
 		JsonPath js = new JsonPath(responseOfSessionResponse);
 		String cookieID = js.get("session.name")+"= "+js.get("session.value");
-
-		return cookieID;
-	}
-
-	@Test
-	public static void createBug() throws IOException {
-
-		String createIssueResponse=	given().header("Cookie",createSessionID()).body("  { \r\n" + 
+		System.out.println("Cookie ID is "+cookieID);
+		String createIssueResponse=	given().header("Cookie",cookieID).header("Content-Type","application/json").body(" { \r\n" + 
 				"      \"fields\": {\r\n" + 
 				"        \"project\": \r\n" + 
 				"        {\r\n" + 
@@ -54,12 +50,29 @@ public class AutomateJIRAAPIs {
 				"            \"name\": \"Bug\"\r\n" + 
 				"        }\r\n" + 
 				"    }\r\n" + 
-				"}").when().post("rest/api/2/issue").then().log().all().extract().response().asString();
+				"}")
+				.when().post("/rest/api/2/issue").then().log().all().extract().response().asString();
 
-		JsonPath js = new JsonPath(createIssueResponse);
-		String id=js.get("id");
-
-		System.out.println("Created Bug id is "+id);
+		JsonPath js1 = new JsonPath(createIssueResponse);
+		String issueId=js1.get("id");
+		System.out.println("Created Bug id is "+issueId);
+		
+		/*Add comment to the created bug in JIRA*/
+		
+		given().pathParam("issueId", issueId).header("Content-Type","application/json").header("Cookie",cookieID)
+		.body("{\r\n" + 
+				"    \"body\": \"Adding comment to the bug created through Automation\",\r\n" + 
+				"    \"visibility\": {\r\n" + 
+				"        \"type\": \"role\",\r\n" + 
+				"        \"value\": \"Administrators\"\r\n" + 
+				"    }\r\n" + 
+				"}").when().post("/rest/api/2/issue/{issueId}/comment").then().assertThat().statusCode(201);
+		
+		
+		
+		/*Delete the created bug in JIRA*/
+		
+	//	given().header("Cookie",cookieID).when().delete("/rest/api/2/issue/"+issueId).then().log().all().assertThat().statusCode(204);
 		
 		
 	}
