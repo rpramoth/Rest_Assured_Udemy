@@ -16,7 +16,7 @@ import io.restassured.path.json.JsonPath;
 
 public class AutomateJIRAAPIs {
 
-	static String userName, password,issueId,cookieID;
+	static String userName, password,issueId,cookieID,idOfComment;
 
 	public static void createSessionId() throws IOException {
 		Properties prop = new Properties();
@@ -59,14 +59,18 @@ public class AutomateJIRAAPIs {
 	}
 
 	public static void addComment() {
-		given().pathParam("issueId", issueId).header("Content-Type","application/json").header("Cookie",cookieID)
-		.body("{\r\n" + 
-				"    \"body\": \"Adding comment to the bug created through Automation\",\r\n" + 
-				"    \"visibility\": {\r\n" + 
-				"        \"type\": \"role\",\r\n" + 
-				"        \"value\": \"Administrators\"\r\n" + 
-				"    }\r\n" + 
-				"}").when().post("/rest/api/2/issue/{issueId}/comment").then().assertThat().statusCode(201);
+		String addCommentResponse=given().pathParam("issueId", issueId).header("Content-Type","application/json").header("Cookie",cookieID)
+				.body("{\r\n" + 
+						"    \"body\": \"Adding comment to the bug created through Automation\",\r\n" + 
+						"    \"visibility\": {\r\n" + 
+						"        \"type\": \"role\",\r\n" + 
+						"        \"value\": \"Administrators\"\r\n" + 
+						"    }\r\n" + 
+						"}").when().post("/rest/api/2/issue/{issueId}/comment").then().assertThat().statusCode(201).extract().response().asString();
+
+		JsonPath js= new JsonPath(addCommentResponse);
+		idOfComment=js.get("id");
+
 	}
 
 
@@ -81,15 +85,32 @@ public class AutomateJIRAAPIs {
 		.header("Cookie",cookieID).multiPart("file",new File("C:\\Users\\Pramod\\Desktop\\New folder\\com.udemy.restAssured\\Config\\JiraLogin.properties"))
 		.pathParam("issueId", issueId)
 		.when().post("rest/api/2/issue/{issueId}/attachments").then().log().all().assertThat().statusCode(200);
-
+ 
 	}
 
 	public static void getIssueDetails() {
 
-		given().pathParam("issueId",issueId).queryParam("fields", "comment").header("Cookie",cookieID).when().get("/rest/api/2/issue/{issueId}")
-		.then().log().all().assertThat().statusCode(200);
+		String getIssueResponse=given().pathParam("issueId",issueId).queryParam("fields", "comment").header("Cookie",cookieID).when().get("/rest/api/2/issue/{issueId}")
+				.then().log().all().assertThat().statusCode(200).extract().response().asString();
+
+		JsonPath js = new JsonPath(getIssueResponse);
+		int commentsSize=js.getInt("fields.comment.comments.size()");
+		for(int i =0;i<commentsSize;i++) {
+			if(js.getInt("fields.comment.comments["+i+"].id")==Integer.parseInt(idOfComment)) {
+				if(js.getString("fields.comment.comments["+i+"].body").equals("Adding comment to the bug created through Automation")) {
+					System.out.println(js.getString("fields.comment.comments["+i+"].body"));
+					System.out.println("Comments that are added are present");
+				}
+				else {
+					System.out.println("Comments that are added are not present");
+
+				}
+			}
+		}
 
 	}
+
+
 
 
 	public static void main(String[] args) throws IOException {
